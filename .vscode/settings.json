@@ -8,7 +8,7 @@
     "tsconfig.json": true,
     "tsconfig.node.json": true,
     "vercel.json": true,
-    "vite.config.ts": true,
+    "vite.config.ts": false,
     ".vscode": true,
     "favicon.ico": true,
     ".gitignore": false,
