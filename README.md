@@ -20,3 +20,21 @@ This an application using Vite and HeroUI (v3) with torn.com's API to allow you 
 ## How to Use
 
 Visit [], enter your api key then go to [] and choose an option from the load bar, the site will then populate your browsers storage with your torn inventory...
+
+## scripts/push
+
+Usage:
+
+```bash
+npm run push -- "fix navbar spacing"
+
+```
+
+Does:
+
+```bash
+git add .
+git commit -m "fix navbar spacing"
+git push
+
+```

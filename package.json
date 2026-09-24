@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "push": "node .scripts/push.cjs"
   },
   "dependencies": {
     "@gravity-ui/icons": "^2.22.0",
