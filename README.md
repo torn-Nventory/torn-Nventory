@@ -2,7 +2,7 @@
 
 This an application using Vite and HeroUI (v3) with torn.com's API to allow you to view your inventory while flying. I will also try to add any extra tools suggested by other users. All user data is only stored in the browser and never shared with external providers or suppliers, I will never sell your data.
 
-[Try it out](https://www.google.com)
+[Try it out](https://torn-nventory.github.io/)
 
 ## Technologies Used
 
@@ -11,11 +11,9 @@ This an application using Vite and HeroUI (v3) with torn.com's API to allow you 
 - [Tailwind CSS](https://tailwindcss.com)
 - [Tailwind Variants](https://tailwind-variants.org)
 - [TypeScript](https://www.typescriptlang.org)
-- [Oxlint](https://www.google.com)
+- [Oxlint](https://www.npmjs.com/package/oxlint)
 
-- [@nuxx/torn-fetch](https://www.google.com)
-- [torn-client](https://www.google.com)
-- [TypeScript](https://www.google.com)
+- [torn-client](https://www.npmjs.com/package/torn-client)
 
 ## How to Use
 

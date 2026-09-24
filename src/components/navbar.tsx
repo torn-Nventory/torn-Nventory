@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { useApp } from "@/context";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { LogoGithub } from '@gravity-ui/icons';
 
 import { ThemeSwitch } from "./theme-switch";
 
@@ -61,6 +62,9 @@ export const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link to="https://github.com/torn-Nventory/torn-Nventory.github.io">
+              <LogoGithub />
+            </Link>
             <ThemeSwitch />
 
             <button
