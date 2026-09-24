@@ -74,7 +74,7 @@ export default function ApiCard() {
                             <span>
                                 This tool needs a limited key, You can get your API key from{'  '}
                             </span>
-                            <Link className="font-semibold text-blue-700 text-base" to="https://www.torn.com/preferences.php#tab=api" target="_blank">
+                            <Link className="font-semibold text-blue-700 text-base" to="https://www.torn.com/preferences.php#tab=api?&step=addNewKey&title=torn-nventory.github.io&type=3" target="_blank">
                                 here
                             </Link>
                         </Description>
