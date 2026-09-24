@@ -1,0 +1,19 @@
+{
+  "tailwindCSS.experimental.classRegex": [
+    ["([\"'`][^\"'`]*.*?[\"'`])", "[\"'`]([^\"'`]*).*?[\"'`]"]
+  ],
+  "files.exclude": {
+    ".npmrc": true,
+    "postcss.config.js": true,
+    "tsconfig.json": true,
+    "tsconfig.node.json": true,
+    "vercel.json": true,
+    "vite.config.ts": true,
+    ".vscode": true,
+    "favicon.ico": true,
+    ".gitignore": true,
+    "package-lock.json": true,
+    "src/index.d.ts": true
+  },
+  "editor.tabSize": 2
+}
