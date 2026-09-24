@@ -11,7 +11,7 @@
     "vite.config.ts": true,
     ".vscode": true,
     "favicon.ico": true,
-    ".gitignore": true,
+    ".gitignore": false,
     "package-lock.json": true,
     "src/index.d.ts": false
   },
