@@ -1,7 +1,12 @@
 import { useApp } from "@/context";
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 export default function IndexPage() {
   const { apiKey } = useApp()
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (apiKey) navigate("/inventory");
+  }, [apiKey])
   return (
     <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 py-16">
       <section className="w-full max-w-3xl text-center">
