@@ -6,10 +6,10 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "@heroui/react";
 import Layout from "./layout";
 import { Provider } from "./context.tsx";
+import ErrorBoundary from "./components/error-boundary.tsx";
 
 import IndexPage from "@/pages/index";
 import SettingsPage from "@/pages/settings";
-
 import InventoryPage from "@/pages/inventory";
 
 import NotFoundPage from "@/pages/not-found.tsx";
@@ -35,12 +35,15 @@ function App() {
 
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <Provider>
-        <App />
-        <ToastProvider />
-      </Provider>
-    </BrowserRouter>
-  </React.StrictMode>,
+  <ErrorBoundary>
+    <React.StrictMode>
+      <BrowserRouter>
+        <Provider>
+          <App />
+          <ToastProvider />
+        </Provider>
+      </BrowserRouter>
+    </React.StrictMode>
+  </ErrorBoundary>
+  ,
 );

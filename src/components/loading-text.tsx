@@ -1,3 +1,8 @@
+/*
+
+Pulled from one of my next projects, seems to becoming my torn brand.
+
+*/
 import { useEffect, useState } from "react";
 
 export default function LoadingText() {

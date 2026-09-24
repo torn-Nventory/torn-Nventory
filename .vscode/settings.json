@@ -13,7 +13,7 @@
     "favicon.ico": true,
     ".gitignore": true,
     "package-lock.json": true,
-    "src/index.d.ts": true
+    "src/index.d.ts": false
   },
   "editor.tabSize": 2
 }

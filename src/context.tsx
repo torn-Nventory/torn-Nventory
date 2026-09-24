@@ -1,47 +1,102 @@
-import type {
-  User,
-  Faction,
-  KeyInfoResponse,
-  TornItemCategory,
-  TornInventoryItemType,
+import {
+  TornAPI,
+  type FactionBasic,
+  type KeyInfoResponse,
+  type TornItem,
+  type UserBasic,
+  type UserInventoryItem,
+  type TornInventoryItemType,
 } from "torn-client";
-
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { tornFetch, paths } from "@nuxx/torn-fetch";
+import { toast } from "@heroui/react";
 
-const API_KEY_STORAGE = "torn_api_key";
+// -----------------------------------------------------------------------------
+// Storage
+// -----------------------------------------------------------------------------
+
+const STORAGE = {
+  apiKey: "torn_api_key",
+  user: "torn_user_key",
+  faction: "torn_faction_key",
+  inventory: "torn_inventory_key",
+  items: "torn_items_key",
+} as const;
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 type ApiKey = string | null;
 
+type ItemsById = Record<number, TornItem>;
+type InventoryById = Record<number, UserInventoryItem>;
+
 type AppContext = {
-  // App state
   mounted: boolean;
 
-  // API authentication
+  // Authentication
   apiKey: ApiKey;
   setApiKey: (key: string) => void;
   clearApiKey: () => void;
 
-  // API key information / permissions
-  keyInfo: KeyInfoResponse | null;
-
-  // User data
-  user: User | null;
-  faction: Faction | null;
-  inventory: Record<TornItemCategory, TornInventoryItemType[]> | null;
-
   // API
-  callApi: <T = unknown>(
-    path: keyof paths,
-    params?: Record<string, unknown>,
-  ) => Promise<T>;
+  client: TornAPI | null;
+  keyInfo: KeyInfoResponse["info"] | null;
+
+  // Cached data
+  user: UserBasic | null;
+  faction: FactionBasic | null;
+  inventory: InventoryById;
+  items: ItemsById;
+
+  // API helpers
+  loadUser: () => Promise<UserBasic>;
+  loadFaction: () => Promise<FactionBasic | null>;
+  loadInventory: () => Promise<UserInventoryItem[]>;
+  loadItems: () => Promise<TornItem[]>;
 };
+
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
+const INVENTORY_CATEGORIES = [
+  "Artifact",
+  "Book",
+  "Booster",
+  "Candy",
+  "Clothing",
+  "Collectible",
+  "Defensive",
+  "Drug",
+  "Energy Drink",
+  "Enhancer",
+  "Flower",
+  "Jewelry",
+  "Material",
+  "Medical",
+  "Other",
+  "Plushie",
+  "Supply Pack",
+  "Tool",
+  "Temporary",
+  "Primary",
+  "Secondary",
+  "Melee",
+] satisfies TornInventoryItemType[];
+
+// -----------------------------------------------------------------------------
+// Context
+// -----------------------------------------------------------------------------
 
 const AppContext = createContext<AppContext | undefined>(undefined);
 
@@ -55,144 +110,496 @@ export function useApp() {
   return context;
 }
 
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+function readStorage<T>(key: string): T | null {
+  try {
+    const value = localStorage.getItem(key);
+
+    if (!value) {
+      return null;
+    }
+
+    return JSON.parse(value) as T;
+  } catch (error) {
+    console.error(`Failed to read localStorage key "${key}":`, error);
+    return null;
+  }
+}
+
+function writeStorage<T>(key: string, value: T) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Failed to write localStorage key "${key}":`, error);
+  }
+}
+
+function removeStorage(...keys: string[]) {
+  for (const key of keys) {
+    localStorage.removeItem(key);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Provider
+// -----------------------------------------------------------------------------
+
 type ProviderProps = {
   children: ReactNode;
 };
 
 export function Provider({ children }: ProviderProps) {
+  // ---------------------------------------------------------------------------
+  // Mount state
+  // ---------------------------------------------------------------------------
+
   const [mounted, setMounted] = useState(false);
 
+  // ---------------------------------------------------------------------------
+  // Authentication
+  // ---------------------------------------------------------------------------
+
   const [apiKey, setApiKeyState] = useState<ApiKey>(null);
+  const [keyInfo, setKeyInfo] = useState<KeyInfoResponse["info"] | null>(null);
 
-  const [keyInfo, setKeyInfo] = useState<KeyInfoResponse | null>(null);
+  // ---------------------------------------------------------------------------
+  // Small/important cached data
+  // ---------------------------------------------------------------------------
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserBasic | null>(null);
+  const [faction, setFaction] = useState<FactionBasic | null>(null);
+  const [inventory, setInventory] = useState<InventoryById>({});
 
-  const [faction, setFaction] = useState<Faction | null>(null);
+  // ---------------------------------------------------------------------------
+  // Large item cache
+  //
+  // Keep the actual 4k-item object in a ref.
+  //
+  // Updating a ref does NOT cause a provider-wide rerender.
+  // We still expose a snapshot through state when the item cache changes.
+  // ---------------------------------------------------------------------------
 
-  const [inventory, setInventory] = useState<Record<
-    TornItemCategory,
-    TornItem[]
-  > | null>(null);
+  const itemsRef = useRef<ItemsById>({});
+  const [itemsVersion, setItemsVersion] = useState(0);
 
-  /**
-   * Load the API key from localStorage.
-   *
-   * The key itself is intentionally kept separate from
-   * the rest of the application/user data.
-   */
-  useEffect(() => {
-    const storedKey = localStorage.getItem(API_KEY_STORAGE);
+  const items = itemsRef.current;
 
-    if (storedKey) {
-      setApiKeyState(storedKey);
+  // ---------------------------------------------------------------------------
+  // Torn API client
+  // ---------------------------------------------------------------------------
+
+  const client = useMemo(() => {
+    if (!apiKey) {
+      return null;
     }
 
-    setMounted(true);
+    return new TornAPI({
+      apiKeys: [apiKey],
+      rateLimitMode: "autoDelay",
+    });
+  }, [apiKey]);
+
+  // ---------------------------------------------------------------------------
+  // Hydrate localStorage once
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    try {
+      const storedApiKey = localStorage.getItem(STORAGE.apiKey);
+
+      const storedUser = readStorage<UserBasic>(STORAGE.user);
+      const storedFaction = readStorage<FactionBasic>(STORAGE.faction);
+      const storedInventory = readStorage<InventoryById>(
+        STORAGE.inventory,
+      );
+      const storedItems = readStorage<ItemsById>(STORAGE.items);
+
+      if (storedApiKey) {
+        setApiKeyState(storedApiKey);
+      }
+
+      if (storedUser) {
+        setUser(storedUser);
+      }
+
+      if (storedFaction) {
+        setFaction(storedFaction);
+      }
+
+      if (storedInventory) {
+        setInventory(storedInventory);
+      }
+
+      if (storedItems) {
+        itemsRef.current = storedItems;
+        setItemsVersion((version) => version + 1);
+      }
+
+      toast.success("Successfully restored cached Torn data.");
+    } catch (error) {
+      console.error("Failed to restore cached Torn data:", error);
+
+      toast.danger(
+        "Failed to restore cached Torn data, check logs for more info.",
+      );
+    } finally {
+      setMounted(true);
+    }
   }, []);
 
-  /**
-   * Save a new API key.
-   */
-  const setApiKey = (newKey: string) => {
+  // ---------------------------------------------------------------------------
+  // API key
+  // ---------------------------------------------------------------------------
+
+  const setApiKey = useCallback((newKey: string) => {
     const trimmedKey = newKey.trim();
 
     if (!trimmedKey) {
-      clearApiKey();
+      removeStorage(
+        STORAGE.apiKey,
+        STORAGE.user,
+        STORAGE.faction,
+        STORAGE.inventory,
+        STORAGE.items,
+      );
+
+      setApiKeyState(null);
+      setKeyInfo(null);
+      setUser(null);
+      setFaction(null);
+      setInventory({});
+
+      itemsRef.current = {};
+      setItemsVersion((version) => version + 1);
 
       return;
     }
 
-    localStorage.setItem(API_KEY_STORAGE, trimmedKey);
+    localStorage.setItem(STORAGE.apiKey, trimmedKey);
     setApiKeyState(trimmedKey);
-  };
+  }, []);
 
-  /**
-   * Remove the API key and associated API-derived state.
-   */
-  const clearApiKey = () => {
-    localStorage.removeItem(API_KEY_STORAGE);
+  const clearApiKey = useCallback(() => {
+    removeStorage(
+      STORAGE.apiKey,
+      STORAGE.user,
+      STORAGE.faction,
+      STORAGE.inventory,
+      STORAGE.items,
+    );
 
     setApiKeyState(null);
     setKeyInfo(null);
     setUser(null);
     setFaction(null);
-    setInventory(null);
-  };
+    setInventory({});
+
+    itemsRef.current = {};
+    setItemsVersion((version) => version + 1);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Cache helpers
+  // ---------------------------------------------------------------------------
+
+  const cacheUser = useCallback((data: UserBasic) => {
+    setUser(data);
+    writeStorage(STORAGE.user, data);
+  }, []);
+
+  const cacheFaction = useCallback((data: FactionBasic) => {
+    setFaction(data);
+    writeStorage(STORAGE.faction, data);
+  }, []);
 
   /**
-   * Generic Torn API request.
+   * Replace the item cache in one operation.
+   *
+   * This is substantially cheaper than doing:
+   *
+   *   setItems(current => ({ ...current, ... }))
+   *
+   * 4,000 times.
    */
-  const callApi = async <T = unknown,>(
-    path: keyof paths,
-    params: Record<string, unknown> = {},
-  ): Promise<T> => {
-    if (!apiKey) {
+  const cacheItems = useCallback((newItems: TornItem[]) => {
+    const next: ItemsById = {};
+
+    for (const item of newItems) {
+      next[item.id] = item;
+    }
+
+    itemsRef.current = next;
+
+    // One React update.
+    setItemsVersion((version) => version + 1);
+
+    // One localStorage serialization.
+    writeStorage(STORAGE.items, next);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Load user
+  // ---------------------------------------------------------------------------
+
+  const loadUser = useCallback(async (): Promise<UserBasic> => {
+    if (!client) {
+      toast.danger("No Torn API key configured.");
       throw new Error("No Torn API key configured");
     }
 
     try {
-      const data = await tornFetch(apiKey, path, params);
+      const response = await client.user.basic();
 
-      return data as T;
+      cacheUser(response.profile);
+
+      return response.profile;
     } catch (error) {
-      console.error("Torn API Error:", error);
+      console.error("Failed to load Torn user:", error);
+
+      toast.danger(
+        "Failed to load Torn user, check logs for more info.",
+      );
+
       throw error;
     }
-  };
+  }, [client, cacheUser]);
 
-  /**
-   * Load information about the API key.
-   *
-   * This is kept in context because KeyInfoResponse determines
-   * what the user is allowed to access.
-   */
+  // ---------------------------------------------------------------------------
+  // Load faction
+  // ---------------------------------------------------------------------------
+
+  const loadFaction = useCallback(
+    async (): Promise<FactionBasic | null> => {
+      if (!client) {
+        toast.danger("No Torn API key configured.");
+        throw new Error("No Torn API key configured");
+      }
+
+      try {
+        const response = await client.faction.basic();
+        const basic = response.basic ?? null;
+
+        if (basic) {
+          cacheFaction(basic);
+        }
+
+        return basic;
+      } catch (error) {
+        console.error("Failed to load Torn faction:", error);
+
+        toast.danger(
+          "Failed to load Torn faction, check logs for more info.",
+        );
+
+        throw error;
+      }
+    },
+    [client, cacheFaction],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Load inventory
+  // ---------------------------------------------------------------------------
+
+  const loadInventory = useCallback(async (): Promise<
+    UserInventoryItem[]
+  > => {
+    if (!client) {
+      toast.danger("No Torn API key configured.");
+      throw new Error("No Torn API key configured");
+    }
+
+    try {
+      const inventoryItems: UserInventoryItem[] = [];
+
+      for (const category of INVENTORY_CATEGORIES) {
+        const response = await client.user.inventory({
+          cat: category,
+        });
+
+        inventoryItems.push(
+          ...(response.inventory.items ?? []),
+        );
+      }
+
+      const nextInventory: InventoryById = {};
+
+      for (const item of inventoryItems) {
+        nextInventory[item.id] = item;
+      }
+
+      setInventory(nextInventory);
+      writeStorage(STORAGE.inventory, nextInventory);
+
+      toast.success("Successfully loaded inventory.");
+
+      return inventoryItems;
+    } catch (error) {
+      console.error("Failed to load inventory:", error);
+
+      toast.danger(
+        "Failed to load inventory, check logs for more info.",
+      );
+
+      throw error;
+    }
+  }, [client]);
+
+  // ---------------------------------------------------------------------------
+  // Load item definitions
+  // ---------------------------------------------------------------------------
+
+  const loadItems = useCallback(async (): Promise<TornItem[]> => {
+    if (!client) {
+      toast.danger("No Torn API key configured.");
+      throw new Error("No Torn API key configured");
+    }
+
+    try {
+      const response = await client.torn.items();
+      const tornItems = response.items ?? [];
+
+      cacheItems(tornItems);
+
+      toast.success(
+        `Successfully loaded ${tornItems.length.toLocaleString()} Torn items.`,
+      );
+
+      return tornItems;
+    } catch (error) {
+      console.error("Failed to load Torn items:", error);
+
+      toast.danger(
+        "Failed to load Torn items, check logs for more info.",
+      );
+
+      throw error;
+    }
+  }, [client, cacheItems]);
+
+  // ---------------------------------------------------------------------------
+  // Load API key information
+  //
+  // IMPORTANT:
+  // Do not depend on `items` here.
+  //
+  // Previously:
+  //
+  //   [mounted, client, items]
+  //
+  // meant every item-cache update could cause this effect to run again.
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
-    if (!mounted || !apiKey) {
+    if (!mounted || !client) {
       return;
     }
 
     let cancelled = false;
 
-    async function loadKeyInfo() {
+    async function initialise() {
+
       try {
-        const data = await callApi<KeyInfoResponse>("/key/info");
+        if (!client) {
+          return;
+        }
+
+        const data = await client.key.info();
+
+        if (cancelled) {
+          return;
+        }
+
+        setKeyInfo(data.info);
+
+        // Only load the item database when we don't have one.
+        if (Object.keys(itemsRef.current).length === 0) {
+          await loadItems();
+        }
 
         if (!cancelled) {
-          setKeyInfo(data);
+          toast.success(
+            "Successfully loaded and verified API key.",
+          );
         }
       } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to load API key information:", error);
-
-          // Invalid/revoked key, for example.
-          setKeyInfo(null);
+        if (cancelled) {
+          return;
         }
+
+        console.error(
+          "Failed to load API key information:",
+          error,
+        );
+
+        setKeyInfo(null);
+
+        toast.danger(
+          "Failed to load API key information, check logs for more info.",
+        );
       }
     }
 
-    loadKeyInfo();
+    initialise();
 
     return () => {
       cancelled = true;
     };
-  }, [mounted, apiKey]);
+  }, [mounted, client, loadItems]);
 
-  const value: AppContext = {
-    mounted,
+  // ---------------------------------------------------------------------------
+  // Context value
+  // ---------------------------------------------------------------------------
 
-    apiKey,
-    setApiKey,
-    clearApiKey,
+  const value = useMemo<AppContext>(
+    () => ({
+      mounted,
 
-    keyInfo,
+      apiKey,
+      setApiKey,
+      clearApiKey,
 
-    user,
-    faction,
-    inventory,
+      client,
+      keyInfo,
 
-    callApi,
-  };
+      user,
+      faction,
+      inventory,
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+      // Reading items makes this component subscribe to itemsVersion.
+      // The actual data remains in the ref.
+      items,
+
+      loadUser,
+      loadFaction,
+      loadInventory,
+      loadItems,
+    }),
+    [
+      mounted,
+      apiKey,
+      setApiKey,
+      clearApiKey,
+      client,
+      keyInfo,
+      user,
+      faction,
+      inventory,
+      itemsVersion,
+      items,
+      loadUser,
+      loadFaction,
+      loadInventory,
+      loadItems,
+    ],
+  );
+
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
+  );
 }

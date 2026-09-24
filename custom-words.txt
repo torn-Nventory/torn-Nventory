@@ -1,2 +1,4 @@
 heroui
+nuxx
 Nventory
+plushie

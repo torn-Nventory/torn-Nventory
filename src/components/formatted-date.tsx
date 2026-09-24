@@ -1,5 +1,8 @@
-"use client";
+/*
 
+Pulled from one of my next projects, might be handy, maybe not.
+
+*/
 type FormattedDateProps = {
   timestamp: string | number | Date;
 };

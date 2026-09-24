@@ -54,7 +54,7 @@ export default function ApiCard() {
                     </span>
                     <div className="flex gap-2 border p-2 rounded-xl">
                         <p className="text-default-500 text-small">Access:</p>
-                        <p className="font-semibold text-default-700 text-small">{keyInfo?.info.access.type || "Not Set"}</p>
+                        <p className="font-semibold text-default-700 text-small">{keyInfo?.access.type || "Not Set"}</p>
                     </div>
                 </div>
                 <Form
@@ -72,7 +72,7 @@ export default function ApiCard() {
                     >
                         <Description className="p-2">
                             <span>
-                                You can get your API key from{'  '}
+                                This tool needs a limited key, You can get your API key from{'  '}
                             </span>
                             <Link className="font-semibold text-blue-700 text-base" to="https://www.torn.com/preferences.php#tab=api" target="_blank">
                                 here
