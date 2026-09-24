@@ -31,9 +31,7 @@ jobs:
         run: npm run build
 
       - name: Configure SPA routing
-  run: |
-    cp dist/index.html dist/404.html
-    ls -la dist
+        run: cp dist/index.html dist/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
