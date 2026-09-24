@@ -83,15 +83,13 @@ export default function InventoryTable({
             </Table.Header>
 
             <Table.Body>
-              {rows.length === 0 && <p className="flex justify-center p-16">
-                No inventory items found.
-              </p>}
-              {rows.map((row) => <>
-                <Table.Row id={String(row.inventory.id)}>
-
+              {rows.map((row) => (
+                <Table.Row id={String(row.inventory.id)} key={row.inventory.id}>
                   <Table.Cell className={includedRows.includes("icon") ? "" : "hidden"}>
-                    <img src={`https://torn.com/images/items/${row.item.id}/medium.png`} alt={row.item.id.toString()} />
-
+                    <img
+                      src={`https://torn.com/images/items/${row.item.id}/medium.png`}
+                      alt={row.item.id.toString()}
+                    />
                   </Table.Cell>
 
                   <Table.Cell>
@@ -99,14 +97,16 @@ export default function InventoryTable({
                   </Table.Cell>
 
                   <Table.Cell className={cat === "all" ? "" : "hidden"}>
-                    {cat === "all" ? row.item.type : "—"}
+                    {row.item.type}
                   </Table.Cell>
 
                   <Table.Cell>
                     {row.inventory.amount.toLocaleString()}
                   </Table.Cell>
 
-                  <Table.Cell className={includedRows.includes("cheapest") ? "" : "hidden"}>
+                  <Table.Cell
+                    className={includedRows.includes("cheapest") ? "" : "hidden"}
+                  >
                     {(() => {
                       const shop = getCheapestShop(row.item.value.shops);
 
@@ -116,18 +116,27 @@ export default function InventoryTable({
                     })()}
                   </Table.Cell>
 
-                  <Table.Cell className={includedRows.includes("market") ? "" : "hidden"}>
+                  <Table.Cell
+                    className={includedRows.includes("market") ? "" : "hidden"}
+                  >
                     ${row.item.value.market_price.toLocaleString()}
                   </Table.Cell>
-                  <Table.Cell className={includedRows.includes("total") ? "" : "hidden"}>
+
+                  <Table.Cell
+                    className={includedRows.includes("total") ? "" : "hidden"}
+                  >
                     ${(
-                      row.item.value.market_price *
-                      row.inventory.amount
+                      row.item.value.market_price * row.inventory.amount
                     ).toLocaleString()}
                   </Table.Cell>
                 </Table.Row>
-              </>)}
+              ))}
             </Table.Body>
+            {rows.length === 0 && (
+              <div className="flex justify-center p-16">
+                No inventory items found.
+              </div>
+            )}
           </Table.Content>
         </Table.ScrollContainer>
       </Table>

@@ -1,5 +1,7 @@
+import { useApp } from "@/context";
 import { Link } from "react-router-dom";
 export default function IndexPage() {
+  const { apiKey } = useApp()
   return (
     <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 py-16">
       <section className="w-full max-w-3xl text-center">
@@ -20,7 +22,7 @@ export default function IndexPage() {
 
         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            to="/settings"
+            to={apiKey ? "/inventory" : "/settings"}
             className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:scale-[1.02]"
           >
             Get started
