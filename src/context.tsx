@@ -27,6 +27,7 @@ const STORAGE = {
   apiKey: "torn_api_key",
   user: "torn_user_key",
   faction: "torn_faction_key",
+  factionBalance: "torn_faction_balance_key",
   inventory: "torn_inventory_key",
   items: "torn_items_key",
 } as const;
@@ -39,6 +40,8 @@ type ApiKey = string | null;
 
 type ItemsById = Record<number, TornItem>;
 type InventoryById = Record<number, UserInventoryItem>;
+
+
 
 type AppContext = {
   mounted: boolean;
@@ -55,12 +58,14 @@ type AppContext = {
   // Cached data
   user: UserBasic | null;
   faction: FactionBasic | null;
+  factionBalance: IFactionBalance;
   inventory: InventoryById;
   items: ItemsById;
 
   // API helpers
   loadUser: () => Promise<UserBasic>;
   loadFaction: () => Promise<FactionBasic | null>;
+  loadFactionBalance: (userId?: number) => Promise<IFactionBalance | null>;
   loadInventory: () => Promise<UserInventoryItem[]>;
   loadItems: () => Promise<TornItem[]>;
 };
@@ -171,6 +176,10 @@ export function Provider({ children }: ProviderProps) {
 
   const [user, setUser] = useState<UserBasic | null>(null);
   const [faction, setFaction] = useState<FactionBasic | null>(null);
+  const [factionBalance, setFactionBalance] = useState<IFactionBalance>({
+    points: null,
+    money: null
+  });
   const [inventory, setInventory] = useState<InventoryById>({});
 
   // ---------------------------------------------------------------------------
@@ -315,6 +324,11 @@ export function Provider({ children }: ProviderProps) {
     writeStorage(STORAGE.faction, data);
   }, []);
 
+  const cacheFactionBalance = useCallback((data: IFactionBalance) => {
+    setFactionBalance(data);
+    writeStorage(STORAGE.factionBalance, data);
+  }, []);
+
   /**
    * Replace the item cache in one operation.
    *
@@ -368,7 +382,7 @@ export function Provider({ children }: ProviderProps) {
   }, [client, cacheUser]);
 
   // ---------------------------------------------------------------------------
-  // Load faction
+  // Load faction + balance
   // ---------------------------------------------------------------------------
 
   const loadFaction = useCallback(
@@ -399,6 +413,62 @@ export function Provider({ children }: ProviderProps) {
     },
     [client, cacheFaction],
   );
+
+  const loadFactionBalance = useCallback(
+    async (userId?: number): Promise<IFactionBalance | null> => {
+      if (!client) {
+        toast.danger("No Torn API key configured.");
+        throw new Error("No Torn API key configured");
+      }
+
+      try {
+        const response = await client.faction.balance();
+        const balances = response.balance ?? null;
+
+        if (!balances) {
+          return null;
+        }
+
+        // Use the explicitly supplied ID first.
+        // Fall back to keyInfo from React state if available.
+        const currentUserId = userId ?? keyInfo?.user.id;
+
+        if (!currentUserId) {
+          throw new Error("Unable to determine current Torn user ID");
+        }
+
+        const myBalance = balances.members.find(
+          (member) => member.id === currentUserId,
+        );
+
+        console.log("response:", response);
+        console.log("balances:", balances);
+        console.log("myBalance:", myBalance);
+        console.log("current user id:", currentUserId);
+
+        const result: IFactionBalance = {
+          points: myBalance?.points ?? null,
+          money: myBalance?.money ?? null,
+        };
+
+        cacheFactionBalance(result);
+
+        toast.success("Faction balance loaded");
+
+        return result;
+      } catch (error) {
+        console.error("Failed to load Torn faction balance:", error);
+
+        toast.danger(
+          "Failed to load faction balance, check logs for more info.",
+        );
+
+        throw error;
+      }
+    },
+    [client, keyInfo, cacheFactionBalance],
+  );
+
 
   // ---------------------------------------------------------------------------
   // Load inventory
@@ -520,6 +590,11 @@ export function Provider({ children }: ProviderProps) {
           await loadItems();
         }
 
+        // IMPORTANT:
+        // data.info is the freshly returned value.
+        // Do not use keyInfo here because setKeyInfo() is asynchronous.
+        await loadFactionBalance(data.info.user.id);
+
         if (!cancelled) {
           toast.success(
             "Successfully loaded and verified API key.",
@@ -567,6 +642,7 @@ export function Provider({ children }: ProviderProps) {
 
       user,
       faction,
+      factionBalance,
       inventory,
 
       // Reading items makes this component subscribe to itemsVersion.
@@ -575,6 +651,7 @@ export function Provider({ children }: ProviderProps) {
 
       loadUser,
       loadFaction,
+      loadFactionBalance,
       loadInventory,
       loadItems,
     }),
@@ -587,11 +664,13 @@ export function Provider({ children }: ProviderProps) {
       keyInfo,
       user,
       faction,
+      factionBalance,
       inventory,
       itemsVersion,
       items,
       loadUser,
       loadFaction,
+      loadFactionBalance,
       loadInventory,
       loadItems,
     ],

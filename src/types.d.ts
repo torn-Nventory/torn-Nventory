@@ -36,4 +36,9 @@ declare global {
       };
     };
   };
+
+  type IFactionBalance = {
+    points: number | null;
+    money: number | null;
+  };
 }

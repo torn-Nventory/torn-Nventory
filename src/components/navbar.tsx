@@ -1,13 +1,15 @@
 "use client";
 
-import { Alert, CloseButton } from "@heroui/react";
 import clsx from "clsx";
-import { useApp } from "@/context";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LogoGithub } from '@gravity-ui/icons';
 
+import { useApp } from "@/context";
+
+import { Alert, CloseButton } from "@heroui/react";
+import { LogoGithub } from '@gravity-ui/icons';
 import { ThemeSwitch } from "./theme-switch";
+import BalanceDropdown from "./balance-dropdown";
 
 const publicNavMenuItems = [
   {
@@ -32,7 +34,7 @@ const userNavMenuItems = [
 
 
 export const Navbar = () => {
-  const { apiKey } = useApp();
+  const { apiKey, factionBalance } = useApp();
   const { pathname } = useLocation();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -62,6 +64,7 @@ export const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <BalanceDropdown apiKey={apiKey} factionBalance={factionBalance} />
             <Link to="https://github.com/torn-Nventory/torn-Nventory.github.io">
               <LogoGithub />
             </Link>
